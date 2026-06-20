@@ -1,6 +1,6 @@
 import os
 
-# ✅ Must be FIRST (before TensorFlow import)
+# ✅ Must be FIRST
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -27,6 +27,7 @@ class_def = {
     'c5': 'operating the radio',
     'c6': 'drinking',
     'c7': 'reaching behind',
+    'c8': 'unknown',
     'c9': 'talking to passenger'
 }
 
@@ -34,12 +35,22 @@ app = Flask(__name__)
 app.secret_key = 'driver-detection-secret'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# ✅ Create upload folder safely
+# ✅ Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ✅ Load model safely for Render
-model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+# =========================
+# ✅ SAFE MODEL LOADING
+# =========================
+model = None
+try:
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    print("✅ Model loaded successfully")
+except Exception as e:
+    print("❌ Model loading failed:", e)
 
+# =========================
+# FUNCTIONS
+# =========================
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -60,9 +71,17 @@ def get_severity(class_key):
     else:
         return 'safe'
 
+# =========================
+# ROUTES
+# =========================
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
+
+        if model is None:
+            flash("Model not loaded")
+            return redirect(request.url)
+
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
@@ -74,6 +93,7 @@ def index():
             return redirect(request.url)
 
         if file and allowed_file(file.filename):
+
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
@@ -84,7 +104,9 @@ def index():
             preds = model.predict(arr)
             class_idx = int(np.argmax(preds))
 
-            # Safe handling
+            if class_idx > 9:
+                class_idx = 0
+
             class_key = f'c{class_idx}'
             label = class_def.get(class_key, "unknown")
             severity = get_severity(class_key)
@@ -104,6 +126,10 @@ def uploaded_file(filename):
 
 @app.route('/predict_api', methods=['POST'])
 def predict_api():
+
+    if model is None:
+        return jsonify({'error': 'Model not loaded'}), 500
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
 
@@ -115,6 +141,9 @@ def predict_api():
 
         preds = model.predict(arr)
         class_idx = int(np.argmax(preds))
+
+        if class_idx > 9:
+            class_idx = 0
 
         class_key = f'c{class_idx}'
         label = class_def.get(class_key, "unknown")
@@ -130,6 +159,10 @@ def webcam():
 
 @app.route('/webcam_predict', methods=['POST'])
 def webcam_predict():
+
+    if model is None:
+        return jsonify({'error': 'Model not loaded'}), 500
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
 
@@ -142,6 +175,9 @@ def webcam_predict():
         preds = model.predict(arr)
         class_idx = int(np.argmax(preds))
 
+        if class_idx > 9:
+            class_idx = 0
+
         class_key = f'c{class_idx}'
         label = class_def.get(class_key, "unknown")
         severity = get_severity(class_key)
@@ -150,7 +186,9 @@ def webcam_predict():
 
     return jsonify({'error': 'Invalid file'}), 400
 
-# ✅ Render-compatible run
+# =========================
+# RENDER ENTRY POINT
+# =========================
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False)
