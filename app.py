@@ -1,9 +1,18 @@
 import os
+
+# ✅ Must be FIRST (before TensorFlow import)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
 from PIL import Image
 import tensorflow as tf
+import logging
+
+# ✅ Clean TensorFlow logs
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
@@ -18,7 +27,6 @@ class_def = {
     'c5': 'operating the radio',
     'c6': 'drinking',
     'c7': 'reaching behind',
-    
     'c9': 'talking to passenger'
 }
 
@@ -26,10 +34,11 @@ app = Flask(__name__)
 app.secret_key = 'driver-detection-secret'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# ✅ Create upload folder safely
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-model = tf.keras.models.load_model(MODEL_PATH)
+# ✅ Load model safely for Render
+model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -43,6 +52,7 @@ def preprocess_image(img):
 def get_severity(class_key):
     high = {'c1', 'c2', 'c3', 'c4'}
     medium = {'c5', 'c6', 'c7', 'c8', 'c9'}
+
     if class_key in high:
         return 'high'
     elif class_key in medium:
@@ -56,25 +66,36 @@ def index():
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
+
         file = request.files['file']
+
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
+
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
+
             img = Image.open(filepath).convert('RGB')
             arr = preprocess_image(img)
+
             preds = model.predict(arr)
-            class_idx = np.argmax(preds)
-            # If class_idx == 8, skip hair and makeup
-            if class_idx == 8:
-                class_idx = 9
+            class_idx = int(np.argmax(preds))
+
+            # Safe handling
             class_key = f'c{class_idx}'
-            label = class_def[class_key]
+            label = class_def.get(class_key, "unknown")
             severity = get_severity(class_key)
-            return render_template('result.html', label=label, severity=severity, filename=filename)
+
+            return render_template(
+                'result.html',
+                label=label,
+                severity=severity,
+                filename=filename
+            )
+
     return render_template('index.html')
 
 @app.route('/uploads/<filename>')
@@ -85,16 +106,22 @@ def uploaded_file(filename):
 def predict_api():
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
+
     file = request.files['file']
+
     if file and allowed_file(file.filename):
         img = Image.open(file.stream).convert('RGB')
         arr = preprocess_image(img)
+
         preds = model.predict(arr)
-        class_idx = np.argmax(preds)
+        class_idx = int(np.argmax(preds))
+
         class_key = f'c{class_idx}'
-        label = class_def[class_key]
+        label = class_def.get(class_key, "unknown")
         severity = get_severity(class_key)
+
         return jsonify({'label': label, 'severity': severity})
+
     return jsonify({'error': 'Invalid file'}), 400
 
 @app.route('/webcam')
@@ -105,17 +132,25 @@ def webcam():
 def webcam_predict():
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
+
     file = request.files['file']
+
     if file and allowed_file(file.filename):
         img = Image.open(file.stream).convert('RGB')
         arr = preprocess_image(img)
+
         preds = model.predict(arr)
-        class_idx = np.argmax(preds)
+        class_idx = int(np.argmax(preds))
+
         class_key = f'c{class_idx}'
-        label = class_def[class_key]
+        label = class_def.get(class_key, "unknown")
         severity = get_severity(class_key)
+
         return jsonify({'label': label, 'severity': severity})
+
     return jsonify({'error': 'Invalid file'}), 400
 
+# ✅ Render-compatible run
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False)
