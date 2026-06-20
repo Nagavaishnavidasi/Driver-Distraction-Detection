@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Model files
+models/*.h5
+models/*.onnx
+
+# Data
+/data/
+*.zip
+*.tar.gz
+
+# Streamlit cache
+.cache/
+
+# Jupyter and system files
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db

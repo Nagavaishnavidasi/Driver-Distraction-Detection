@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Driver Distraction Detection - Webcam</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { 
+      background: #f8fafc; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh; 
+    }
+    .main-card { 
+      width: 700px; 
+      padding: 2em; 
+      border-radius: 18px; 
+      box-shadow: 0 0 18px rgba(0,0,0,0.08); 
+      background: #fff; 
+      text-align: center;
+    }
+    .title { font-size: 2rem; font-weight: bold; margin-bottom: 1rem; }
+    video { 
+      width: 100%; 
+      height: auto; 
+      border-radius: 12px; 
+      border: 4px solid #e5e7eb; 
+      margin-bottom: 1rem;
+    }
+    .result-area .alert { 
+      font-size: 1.2rem; 
+      font-weight: bold; 
+      border-radius: 12px; 
+    }
+  </style>
+</head>
+<body>
+  <div class="main-card">
+    <div class="title">Driver Distraction Detection</div>
+    <video id="video" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div class="result-area" id="result-area"></div>
+    <audio id="buzzer" src="{{ url_for('static', filename='buzzer.mp3') }}"></audio>
+    <a href="/" class="btn btn-outline-secondary w-100 mt-3">Back to Upload</a>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const resultArea = document.getElementById('result-area');
+    const buzzer = document.getElementById('buzzer');
+    let isPredicting = false;
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; startPredictLoop(); });
+
+    function predictFrame() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      canvas.toBlob(function(blob) {
+        let formData = new FormData();
+        formData.append('file', blob, 'capture.jpg');
+        fetch('/webcam_predict', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+          let html = '';
+          if(data.severity === 'high') {
+            html = `<div class='alert alert-danger'>⚠ HIGH RISK!<br>${data.label}</div>`;
+            buzzer.currentTime = 0; buzzer.play();
+          } else if(data.severity === 'medium') {
+            html = `<div class='alert alert-warning'>⚠ WARNING<br>${data.label}</div>`;
+            buzzer.currentTime = 0; buzzer.play();
+          } else {
+            html = `<div class='alert alert-success'>✔ SAFE DRIVING<br>${data.label}</div>`;
+          }
+          resultArea.innerHTML = html;
+        });
+      }, 'image/jpeg');
+    }
+
+    function startPredictLoop() {
+      if (isPredicting) return;
+      isPredicting = true;
+      setInterval(predictFrame, 2000);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+streamlit
+flask
+werkzeug
+opencv-python
+numpy
+Pillow
+tensorflow
+keras
+sounddevice
+soundfile
