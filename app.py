@@ -42,12 +42,19 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # ✅ SAFE MODEL LOADING
 # =========================
 model = None
-try:
-    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-    print("✅ Model loaded successfully")
-except Exception as e:
-    print("❌ Model loading failed:", e)
 
+try:
+    from keras.models import load_model
+
+    model = load_model(
+        MODEL_PATH,
+        compile=False
+    )
+
+    print("✅ Model loaded successfully")
+
+except Exception as e:
+    print(f"❌ Model loading failed: {str(e)}")
 # =========================
 # FUNCTIONS
 # =========================
