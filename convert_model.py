@@ -1,6 +1,14 @@
-from keras.models import load_model
+try:
+    import tensorflow as tf
+except ModuleNotFoundError:
+    raise SystemExit("TensorFlow is not installed. Install it with 'pip install tensorflow'.")
 
-model = load_model("models/driver_distraction_model.h5", compile=False)
+# Load your old model
+model = tf.keras.models.load_model("models/driver_distraction_model.h5")
 
-model.save("models/driver_distraction_model_new.h5")
-print("Model converted successfully!")
+print("Model loaded successfully")
+
+# Save in NEW safe format
+model.save("models/fixed_model.keras")
+
+print("Saved as fixed_model.keras successfully")

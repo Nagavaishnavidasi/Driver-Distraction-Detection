@@ -8,15 +8,21 @@ import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
 from PIL import Image
-import tensorflow as tf
 import logging
 
+try:
+    import tensorflow as tf
+except ImportError as e:
+    tf = None
+    print(f"❌ TensorFlow import failed: {e}")
+
 # ✅ Clean TensorFlow logs
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
+if tf is not None:
+    logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-MODEL_PATH = os.path.join('models', 'driver_distraction_model.h5')
+MODEL_PATH = os.path.join('models', 'final_model.keras')
 
 class_def = {
     'c0': 'safe driving',
@@ -41,12 +47,12 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # =========================
 # ✅ SAFE MODEL LOADING
 # =========================
-model = None
+mmodel = None
 
 try:
-    from keras.models import load_model
+    import tensorflow as tf
 
-    model = load_model(
+    model = tf.keras.models.load_model(
         MODEL_PATH,
         compile=False
     )
@@ -54,7 +60,9 @@ try:
     print("✅ Model loaded successfully")
 
 except Exception as e:
-    print(f"❌ Model loading failed: {str(e)}")
+    model = None
+    print("❌ Model loading failed:", str(e))
+    print("👉 Check: model file path, TensorFlow version, and .keras format")
 # =========================
 # FUNCTIONS
 # =========================
